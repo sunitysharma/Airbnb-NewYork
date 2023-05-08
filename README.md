@@ -14,4 +14,4 @@ Airbnb Data Analysis.R - The code for data analysis on the Airbnb New York datas
 
 Airbnb Data Analysis.RMD - This file is the notebook version of the same code.
 
-Project Report - Airbnb
+Project Report - Airbnb New York Open Data.pdf - A report that provides information and insights on an analysis of the Airbnb New York Open Data.
