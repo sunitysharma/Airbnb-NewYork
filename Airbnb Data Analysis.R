@@ -1,0 +1,588 @@
+library(dplyr)
+library(tidyverse)
+library(readr)
+library(ggplot2)
+
+#Loading the data for exploratory analysis
+attach(airbnb)
+head(airbnb)
+
+
+#2. Calculate the correlation between the different attributes (include the figure produced by R in your answer).
+
+library(correlation)
+correlation::correlation(airbnb,include_factors = FALSE, method = 'pearson')
+
+# Select only the numeric columns
+numeric_cols <- sapply(airbnb, is.numeric)
+airbnb_numeric <- airbnb[, numeric_cols]
+
+# Compute the correlation matrix using the selected columns
+corr_matrix <- cor(airbnb_numeric, method = "pearson")
+
+# Plot the correlation matrix using corrplot
+library(corrplot)
+corrplot(corr_matrix, order = "AOE")
+
+#Remove the outliers
+airbnb <-airbnb[-which(airbnb$price%in%boxplot.stats(airbnb$price)$out),]
+airbnb <-airbnb[-which(airbnb$number_of_reviews%in%boxplot.stats(airbnb$number_of_reviews)$out),]
+airbnb <-airbnb[-which(airbnb$reviews_per_month%in%boxplot.stats(airbnb$reviews_per_month)$out),]
+airbnb <-airbnb[-which(airbnb$minimum_nights%in%boxplot.stats(airbnb$minimum_nights)$out),]
+
+#Check again using boxplot
+boxplot(airbnb$price)
+boxplot(airbnb$number_of_reviews)
+boxplot(airbnb$reviews_per_month)
+boxplot(airbnb$minimum_nights)
+
+#3 Data Analysis
+
+
+############Exploratory Data###################
+property_data <-  airbnb %>% 
+  group_by(neighbourhood_group, room_type) %>% 
+  summarize(Freq = n())
+
+property_types <-  airbnb %>% 
+  filter(room_type %in% c("Private room","Entire home/apt","Entire home/apt")) %>% 
+  group_by(neighbourhood_group) %>% 
+  summarize(sum = n())
+
+ratio_property <- merge (property_data, property_types, by="neighbourhood_group")
+
+ratio_property <- ratio_property %>% 
+  mutate(ratio = Freq/sum)
+
+
+#Different types of Airbnb Listings in New York
+
+ggplot(ratio_property, aes(x=neighbourhood_group, y = ratio, fill = room_type)) +
+  geom_bar(position = "dodge", stat="identity") + 
+  xlab("Borough") + ylab ("Count") +
+  scale_fill_discrete(name = "Property Type") + 
+  scale_y_continuous(labels = scales::percent) +
+  ggtitle("Different types of Airbnb Listings in New York",
+          subtitle = "Property Types in each neighbourhood ") +
+  theme(plot.title = element_text(face = "bold", size = 14, hjust = 0.5, color = "black") ) +
+  theme(plot.subtitle = element_text(face = "bold", color = "#777A7F", hjust = 0.5)) +
+  theme(plot.caption = element_text(color = "black"))+scale_color_gradient(low="#d3cbcb", high="#852eaa")+
+  scale_fill_manual("Property Type", values=c("#8CBCB9","#dda448", "#bb342f", "#ede7e3", "#ffa62b")) +
+  xlab("Neighborhood Group") + ylab("Percentage")
+
+#Comparison of Mean Price for each Neighbourhood Group
+airbnb %>% 
+  filter(!(is.na(neighbourhood_group))) %>% 
+  filter(!(neighbourhood_group == "Unknown")) %>% 
+  group_by(neighbourhood_group) %>% 
+  summarise(mean_price = mean(price, na.rm = TRUE)) %>% 
+  ggplot(aes(x = reorder(neighbourhood_group, mean_price), y = mean_price, fill = neighbourhood_group)) +
+  geom_col(stat ="identity", color = "black", fill="#bb342f") +
+  coord_flip() +
+  theme_gray() +
+  labs(x = "Neighbourhood Group", y = "Price") +
+  geom_text(aes(label = round(mean_price,digit = 2)), hjust = 2.0, color = "white", size = 3.5) +
+  ggtitle(" Comparison of Mean Price for each Neighbourhood Group", subtitle = "Price vs Neighbourhood Group") + 
+  xlab("Neighbourhood Group") + 
+  ylab("Mean Price") +
+  theme(legend.position = "none",
+        plot.title = element_text(color = "black", size = 14, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(color = "#777A7F", hjust = 0.5),
+        axis.title.y = element_text(),
+        axis.title.x = element_text(),
+        axis.ticks = element_blank())
+
+
+#Comparison of Mean Price with all Room Types
+airbnb %>% 
+  filter(!(is.na(room_type))) %>% 
+  filter(!(room_type == "Unknown")) %>% 
+  group_by(room_type) %>% 
+  summarise(mean_price = mean(price, na.rm = TRUE)) %>% 
+  ggplot(aes(x = reorder(room_type, mean_price), y = mean_price, fill = room_type)) +
+  geom_col(stat ="identity", color = "black", fill="#bb342f") +
+  coord_flip() +
+  theme_gray() +
+  labs(x = "Room Type", y = "Price") +
+  geom_text(aes(label = round(mean_price,digit = 2)), hjust = 2.0, color = "white", size = 3.5) +
+  ggtitle("Comparison of Mean Price with all Room Types", subtitle = "Price vs Room Type") + 
+  xlab("Room Type") + 
+  ylab("Mean Price") +
+  theme(legend.position = "none",
+        plot.title = element_text(color = "black", size = 14, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(color = "#777A7F", hjust = 0.5),
+        axis.title.y = element_text(),
+        axis.title.x = element_text(),
+        axis.ticks = element_blank())
+
+#Checking the correlation matrix again
+library("corrplot")
+airbnb_cor <- airbnb[, sapply(airbnb, is.numeric)]
+airbnb_cor <- airbnb_cor[complete.cases(airbnb_cor), ]
+correlation_matrix <- cor(airbnb_cor, method = "spearman")
+corrplot(correlation_matrix, method = "color")
+
+# Convert categorical variables to factors
+airbnb$neighbourhood_group <- as.factor(airbnb$neighbourhood_group)
+airbnb$neighbourhood <- as.factor(airbnb$neighbourhood)
+airbnb$room_type <- as.factor(airbnb$room_type)
+
+# Remove outliers
+airbnb <- airbnb[airbnb$price <= quantile(airbnb$price, 0.99),]
+airbnb <- airbnb[airbnb$minimum_nights <= quantile(airbnb$minimum_nights, 0.99),]
+
+
+# Price distribution by neighbourhood group
+ggplot(airbnb, aes(x = neighbourhood_group, y = price)) +
+  geom_boxplot() +
+  labs(x = "Neighbourhood Group", y = "Price") +
+  ggtitle("Price distribution by neighbourhood group")
+
+# Price distribution by neighbourhood
+ggplot(airbnb, aes(x = neighbourhood, y = price)) +
+  geom_boxplot() +
+  labs(x = "Neighbourhood", y = "Price") +
+  ggtitle("Price distribution by neighbourhood")
+
+# Price distribution by room type
+ggplot(airbnb, aes(x = room_type, y = price)) +
+  geom_boxplot() +
+  labs(x = "Room Type", y = "Price") +
+  ggtitle("Price distribution by room type")
+
+# Scatter plot of price vs. minimum nights
+ggplot(airbnb, aes(x = minimum_nights, y = price)) +
+  geom_point(alpha = 0.2) +
+  scale_x_continuous(trans = "log10") +
+  scale_y_continuous(trans = "log10") +
+  labs(x = "Minimum Nights (log10)", y = "Price (log10)") +
+  ggtitle("Price vs. Minimum Nights")
+
+# Correlation heatmap
+library(GGally)
+ggcorr(airbnb[, c("price", "minimum_nights", "number_of_reviews", "availability_365")])
+
+#Information collected:
+# From the exploratory data analysis, we can observe that:
+#   
+# Manhattan is the most expensive neighbourhood group, with prices significantly higher than the other neighbourhood groups.
+# Within Manhattan, the neighbourhoods of SoHo, Tribeca, and West Village have the highest prices.
+# Entire homes/apartments are the most expensive room type, followed by private rooms and shared rooms.
+# There is a weak positive correlation between price and minimum nights, as well as price and availability.
+
+
+#perform some feature engineering to create new features that may be useful for our analysis:
+# Create a new feature for distance to Times Square
+
+library(geodist)  # load the geosphere package
+ts_lat <-airbnb %>%
+  filter(neighbourhood_group == "Manhattan") %>%
+  summarize(lat = mean(latitude), long = mean(longitude))
+
+airbnb <- airbnb %>%
+  mutate(dist_ts = geodist(cbind(longitude, latitude), c(ts_lat$long, ts_lat$lat)))
+
+#View the distribution of the new feature
+ggplot(airbnb, aes(x = dist_ts)) +
+  geom_histogram(bins = 50, fill = "blue", color = "white") +
+  ggtitle("Distribution of Distance to Times Square") +
+  xlab("Distance to Times Square (km)") +
+  ylab("Frequency")
+
+#Create a new feature for distance to Central Park
+cp_lat <- airbnb %>%
+  filter(neighbourhood_group == "Manhattan") %>%
+  summarize(lat = mean(latitude), long = mean(longitude))
+
+airbnb <- airbnb %>%
+  mutate(dist_cp = geodist(cbind(longitude, latitude), c(cp_lat$long, cp_lat$lat)))
+
+#View the distribution of the new feature
+ggplot(airbnb, aes(x = dist_cp)) +
+  geom_histogram(bins = 50, fill = "blue", color = "white") +
+  ggtitle("Distribution of Distance to Central Park") +
+  xlab("Distance to Central Park (km)") +
+  ylab("Frequency")
+
+#Create a new feature for distance to JFK airport
+jfk_lat <- 40.6413
+jfk_long <- -73.7781
+
+airbnb <- airbnb %>%
+  mutate(dist_jfk = geodist(cbind(longitude, latitude), c(jfk_long, jfk_lat)))
+
+#View the distribution of the new feature
+ggplot(airbnb, aes(x = dist_jfk)) +
+  geom_histogram(bins = 50, fill = "blue", color = "white") +
+  ggtitle("Distribution of Distance to JFK Airport") +
+  xlab("Distance to JFK Airport (km)") +
+  ylab("Frequency")
+
+#Create a new feature for distance to LaGuardia airport
+lga_lat <- 40.7769
+lga_long <- -73.8740
+
+airbnb <- airbnb %>%
+  mutate(dist_lga = geodist(cbind(longitude, latitude), c(lga_long, lga_lat)))
+
+#View the distribution of the new feature
+ggplot(airbnb, aes(x = dist_lga)) +
+  geom_histogram(bins = 50, fill = "blue", color = "white") +
+  ggtitle("Distribution of Distance to LaGuardia Airport") +
+  xlab("Distance to LaGuardia Airport (km)") +
+  ylab("Frequency")
+
+#Feature selection using correlation analysis
+library(fastDummies)
+library(tidyr)
+library(tibble)
+cor_df <- airbnb %>%
+  select(price, dist_ts, dist_cp, dist_jfk, dist_lga, neighbourhood_group, room_type, minimum_nights, availability_365,
+         reviews_per_month,  number_of_reviews, calculated_host_listings_count) %>%
+  mutate_if(is.character, as.factor) %>%
+  dummy_cols() %>%
+  select(-ends_with(".none")) %>%
+  select(-starts_with("neighbourhood_group.")) %>%
+  select_if(is.numeric) %>%   # only select numeric columns
+  na.omit() %>%   # remove rows with missing values
+  cor(use = "pairwise.complete.obs") %>%   # compute correlation matrix
+  as.data.frame() %>%
+  rownames_to_column(var = "variable") %>%
+  gather(variable2, correlation, -variable) %>%
+  mutate(correlation = abs(correlation)) %>%
+  filter(variable != variable2)
+
+#View the top 10 most correlated features with price
+cor_df %>%
+  arrange(desc(correlation)) %>%
+  head(10)
+library(ggplot2)
+
+cor_df %>%
+  arrange(desc(correlation)) %>%
+  head(10) %>%
+  ggplot(aes(x = reorder(variable2, correlation), y = correlation)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(x = "Feature", y = "Correlation", title = "Top 10 Most Correlated Features with Price")
+
+# Create a new data frame with only the selected features
+selected_features <- c("price", "dist_ts", "dist_cp", "dist_jfk", "dist_lga", "neighbourhood_group", "room_type")
+airbnb_selected <- airbnb %>% select(selected_features)
+
+# Check the new data frame
+glimpse(airbnb_selected)
+
+#Histogram of prices
+ggplot(data = airbnb, aes(x = price)) +
+  geom_histogram(binwidth = 50) +
+  labs(title = "Distribution of Prices for Airbnb Rentals in New York",
+       x = "Price (USD)",
+       y = "Frequency")
+
+#The histogram shows that the majority of Airbnb rentals in New York are priced between $0 and $1000 per night, with a 
+#few outliers priced over $1000 per night.
+#Box plot of price by room type
+ggplot(data = airbnb_selected, aes(x = room_type, y = price, fill = neighbourhood_group)) +
+  geom_boxplot() +
+  labs(title = "Price by Room Type",
+       x = "Room Type",
+       y = "Price (USD)",
+       fill = "Neighborhood Group")
+
+#The box plot shows that entire homes/apartments are generally the most expensive type of rental, 
+#followed by private rooms and shared rooms. We can also see that rentals in the Manhattan and 
+#Brooklyn neighborhoods tend to be priced higher overall, regardless of room type.
+
+################ Regression ######################################
+
+#Loading the data
+attach(Airbnb_data_cleaned1)
+head(Airbnb_data_cleaned1)
+
+# Create a boxplot to visualize the distribution of the data
+boxplot(Airbnb_data_cleaned1$price)
+boxplot(Airbnb_data_cleaned1$minimum_nights)
+boxplot(Airbnb_data_cleaned1$number_of_reviews)
+boxplot(Airbnb_data_cleaned1$reviews_per_month)
+
+
+#Remove the outliers
+
+# Create a list of column names
+cols <- c("price", "minimum_nights", "reviews_per_month", "number_of_reviews")
+
+# Loop over each column and remove outliers
+Airbnb_data_cleaned1 <- Airbnb_data_cleaned1 %>%
+  mutate(across(all_of(cols), ~ ifelse(. %in% boxplot.stats(.)$out, NA, .)))
+
+# Remove rows with missing values
+Airbnb_data_cleaned1 <- na.omit(Airbnb_data_cleaned1)
+dim(Airbnb_data_cleaned1)
+
+
+#Check again using boxplot
+boxplot(Airbnb_data_cleaned1$price)
+boxplot(Airbnb_data_cleaned1$number_of_reviews)
+boxplot(Airbnb_data_cleaned1$reviews_per_month)
+boxplot(Airbnb_data_cleaned1$minimum_nights)
+
+#Divide the Airbnb data into training and testing (Preprocessing)
+
+library(caret)
+set.seed(1) # for reproducibility
+
+# Create a vector of row indices
+rows <- 1:nrow(Airbnb_data_cleaned1)
+
+# Randomly sample 80% of the row indices for the training set
+training_rows <- sample(rows, floor(0.8 * length(rows)))
+
+# The remaining rows are for the testing set
+testing_rows <- setdiff(rows, training_rows)
+
+# Write the training and testing sets to separate files
+write.table(Airbnb_data_cleaned1[training_rows, ], file = "Airbnb_training_data1.csv", row.names = FALSE, col.names = FALSE)
+write.table(Airbnb_data_cleaned1[testing_rows, ], file = "Airbnb_testing_data1.csv", row.names = FALSE, col.names = FALSE)
+
+training_data <- Airbnb_data_cleaned1[training_rows, ]
+testing_data <- Airbnb_data_cleaned1[-training_rows, ]
+
+# Create X.train and X.test data frames that exclude the class label
+X.train <- training_data[, -which(names(training_data) == "price")]
+X.test <- testing_data[, -which(names(testing_data) == "price")]
+Y.train <- training_data$price
+Y.test <- testing_data$price
+
+#Division Verification in number of Examples
+cat("Number of examples in training data:", nrow(training_data), "\n")
+cat("Number of examples in testing data:", nrow(testing_data), "\n")
+
+# Multiple Linear Regression Model
+first_model<-lm(price~., data=training_data)
+first_prediction<-predict(first_model, testing_data)
+summary(first_model)
+
+# Calculate the Mean Squared Error (MSE)
+MSE <- mean((Y.test - first_prediction)^2)
+
+# Print the resulting MSE
+print(paste0("The resulting MSE is: ", MSE))
+
+
+# LASSO #
+
+library(glmnet)
+## Lasso
+x=Airbnb_data_cleaned1[, -which(names(Airbnb_data_cleaned1) == "price")]
+y=Airbnb_data_cleaned1$price
+
+#Matrix Generation
+X.train_M<-data.matrix(X.train)
+Y.train_M<-data.matrix(Y.train)
+X.test_M<-data.matrix(X.test)
+Y.test_M<-data.matrix(Y.test)
+# alpha=1 for Lasso
+lasso.mod=glmnet(x=X.train_M,y=Y.train_M,alpha=1)
+plot(lasso.mod)
+
+# Use CV to calculate test error
+set.seed(1)
+cv.out=cv.glmnet(x=X.train_M,y=Y.train_M,alpha=1)
+plot(cv.out)
+bestlambda <- cv.out$lambda.min
+lasso.pred=predict(lasso.mod,s=bestlambda ,newx=X.test_M)
+
+# Several coefficients are exactly zero
+out=glmnet(x=X.train_M,y=Y.train_M,alpha=1)
+lasso.coef=predict(out,type="coefficients",s=bestlambda)
+mse_lasso <- mean((lasso.pred - Y.test)^2)
+# Print the resulting MSE
+print(paste0("The resulting LASSO MSE is: ", mse_lasso))
+
+bestlambda <- cv.out$lambda.min
+bestlambda
+
+library(Metrics)
+# Print the resulting R2
+lasso_r2 <- cor(Y.test_M, lasso.pred)^2
+print(paste0("The resulting LASSO R2 is: ", lasso_r2))
+
+# Calculate the adjusted R2
+n_lasso <- nrow(X.test_M)
+p_lasso <- ncol(X.test_M) - 1
+lasso_adjR2 <- 1 - ((1 - lasso_r2) * (n_lasso - 1)) / (n_lasso - p_lasso - 1)
+print(paste0("The resulting LASSO adjusted R2 is: ", lasso_adjR2))
+
+###### PLS #############################
+
+library(pls)
+
+#a) PLS with cross-validation to optimize M
+training_data_filtered <- training_data[, -nearZeroVar(training_data)]
+set.seed(1)
+pls.cv = plsr(price ~ ., data = training_data_filtered, scale = TRUE, validation = "CV")
+summary(pls.cv)
+
+# Plot the validation curve and extract the optimal number of components (M)
+validationplot(pls.cv, val.type = "MSEP")
+
+optM <- 9
+testing_data_filtered <- testing_data[, -nearZeroVar(testing_data)]
+
+pls.pred = predict(pls.cv, testing_data_filtered, ncomp = optM)
+mse = mean((pls.pred - Y.test)^2)
+cat("MSE using optimal M =", mse, "\n")
+
+# Refit the model using all the data and the optimal M
+pls.fit = plsr(price ~ ., data = training_data_filtered, scale = TRUE, ncomp = optM)
+summary(pls.fit)
+
+# Calculate the R2
+r2_pls_set <- R2(pls.fit)
+r2_pls_set
+
+r2_pls<-0.4918
+cat("PLS R2 =", r2_pls, "\n")
+
+# Calculate the adjusted R2
+n_pls <- nrow(testing_data_filtered)
+p_pls <- ncol(testing_data_filtered) - 1
+adj_r2_pls <- 1 - ((1 - r2_pls) * (n_pls - 1)) / (n_pls - p_pls - 1)
+cat("PLS Adjusted R2 =", adj_r2_pls, "\n")
+
+########## Decision Tree ###################
+
+library(tree)
+library(MASS)
+set.seed(1)
+tree.airbnb=tree(price~.,training_data)
+# Only a few of the variables were used in constructing the tree
+summary(tree.airbnb)
+
+# Plot the tree
+plot(tree.airbnb)
+text(tree.airbnb,pretty=0,cex=0.75)
+
+# cv.tree() to determine whether pruning improves performance
+cv.airbnb=cv.tree(tree.airbnb)
+# It doesn't seem to be the case
+plot(cv.airbnb$size,cv.airbnb$dev,type="b")
+
+# prune.tree(): function to prune to be used in case we wanted to prune the tree
+prune.airbnb=prune.tree(tree.airbnb,best=6)
+plot(prune.airbnb)
+text(prune.airbnb,pretty=0,cex=0.75)
+
+# Predicting based on CV results (i.e., use the unpruned tree)
+yhat=predict(tree.airbnb,testing_data)
+plot(yhat,Y.test)
+abline(0,1)
+
+# Test error
+mse_tree=mean((yhat-Y.test)^2)
+mse_tree
+
+# Calculate the R2
+ybar_tree <- mean(Y.test)
+
+# Calculate the total sum of squares (SST)
+SST_tree <- sum((Y.test - ybar_tree)^2)
+
+# Calculate the residual sum of squares (SSE)
+SSE_tree <- sum((Y.test - yhat)^2)
+
+# Calculate the R-squared value
+r2_tree <- 1 - SSE_tree/SST_tree
+
+# Print the R-squared value
+cat("R2_tree =", r2_tree, "\n")
+
+# Calculate the adjusted R2
+n_tree <- nrow(testing_data)
+p_tree <- ncol(testing_data) - 1
+adj_r2_tree <- 1 - ((1 - r2_tree) * (n_tree - 1)) / (n_tree - p_tree - 1)
+cat("Adjusted R2_tree =", adj_r2_tree, "\n")
+
+##################
+# Random Forests #
+##################
+library(randomForest)
+# By default randomForest() uses m=p/3 for regression and m=sqrt(p) for classification
+# Let's try m=6
+set.seed(1)
+rf.airbnb=randomForest(price~.,training_data,mtry=233/3,importance =T)
+yhat.rf = predict(rf.airbnb ,testing_data)
+
+mse.rf<-mean((yhat.rf-Y.test)^2)
+mse.rf
+
+# Calculate the R2
+ybar_rf <- mean(Y.test)
+
+# Calculate the total sum of squares (SST)
+SST_rf <- sum((Y.test - ybar_rf)^2)
+
+# Calculate the residual sum of squares (SSE)
+SSE_rf <- sum((Y.test - yhat.rf)^2)
+
+# Calculate the R-squared value
+r2_rf <- 1 - SSE_rf/SST_rf
+cat("RF R2 =", r2_rf, "\n")
+
+# Calculate the adjusted R2
+n_rf <- nrow(testing_data)
+p_rf <- ncol(testing_data) - 1
+adj_r2_rf <- 1 - ((1 - r2_rf) * (n_rf - 1)) / (n_rf - p_rf - 1)
+cat("Adjusted R2_rf =", adj_r2_rf, "\n")
+
+# importance(): view the importance of each variable
+# %IncMSE: mean decrease of accuracy in predictions on the OOB samples when a 
+# given variable is excluded from the model
+# IncNodeImpurity: total decrease in node impurity that results from splits over
+# that variable, averaged over all trees (RSS in regr. vs. deviance in class)
+importance(rf.airbnb)
+
+# varImpPlot(): Variance importance plot
+varImpPlot(rf.airbnb)
+
+#########Boosting##############
+
+# gbm: library for boosting
+library(gbm)
+
+set.seed(1)
+# Since this is a regression problem, we set the distribution to "gaussian"
+# For binary classification, we would use "bernoulli"
+# n.trees: number of trees we want
+# interaction.depth: limits the depth of each tree
+boost.airbnb=gbm(price~.,data=training_data,distribution="gaussian",n.trees=5000, interaction.depth=4)
+
+# In this case, summary() produces the relative influence plot and outputs 
+# the relative influence statistics
+summary(boost.airbnb)
+
+
+#MSE Test
+# Performance on the test set
+yhat.boost=predict(boost.airbnb,testing_data,n.trees=5000)
+mean((yhat.boost -Y.test)^2)
+
+# Calculate the R2
+ybar_boost <- mean(Y.test)
+
+# Calculate the total sum of squares (SST)
+SST_boost <- sum((Y.test - ybar_boost)^2)
+
+# Calculate the residual sum of squares (SSE)
+SSE_boost <- sum((Y.test - yhat.boost)^2)
+
+# Calculate the R-squared value
+r2_boost <- 1 - SSE_boost/SST_boost
+cat("Boosting R2 =", r2_boost, "\n")
+
+# Calculate the adjusted R2
+n_boost <- nrow(testing_data)
+p_boost <- ncol(testing_data) - 1
+adj_r2_boost <- 1 - ((1 - r2_boost) * (n_boost - 1)) / (n_boost - p_boost - 1)
+cat("Adjusted R2_boost =", adj_r2_boost, "\n")
